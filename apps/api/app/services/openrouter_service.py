@@ -88,9 +88,10 @@ def build_ai_bp_insights(
     supplier: pd.DataFrame,
     export_version: str,
     requested_model: str | None = None,
+    allow_remote_ai: bool = True,
 ) -> tuple[dict[str, Any], bool, str | None]:
     fallback = heuristic_bp_insights(cleaned, anomalies, metrics, monthly, customer, supplier, export_version)
-    if not openrouter_enabled():
+    if not allow_remote_ai or not openrouter_enabled():
         return fallback, False, None
 
     prompt_payload = {

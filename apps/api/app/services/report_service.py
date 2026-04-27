@@ -36,6 +36,7 @@ def generate_report(upload_id: str | None, mapping: dict[str, str], config: Any,
         base_tables["供应商汇总表"],
         config.export_version,
         config.ai_model,
+        allow_remote_ai=True,
     )
     bp_sheet = None
     if config.enable_ai_enhance and ai_payload.get("sheet_rows"):
@@ -130,6 +131,7 @@ def build_report_file_bytes_from_path(source_path: Path, source_filename: str, m
         base_tables["供应商汇总表"],
         config.export_version,
         config.ai_model,
+        allow_remote_ai=False,
     )
     bp_sheet = None
     if config.enable_ai_enhance and ai_payload.get("sheet_rows"):
