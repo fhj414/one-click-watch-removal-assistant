@@ -19,6 +19,7 @@
 - Root Directory：`apps/api`
 - 入口文件：`api/index.py`
 - Vercel 会从项目内的 `api/` 目录识别 Python Serverless Function；当前仓库已经改成 `api/index.py` 作为 FastAPI 入口。[FastAPI on Vercel](https://vercel.com/docs/frameworks/backend/fastapi)
+- 后端项目不再依赖自定义 `vercel.json` 的 `functions` pattern，避免因目录匹配导致部署失败；如需调整执行时长，优先在 Vercel 项目设置里配置。
 
 主要环境变量：
 
