@@ -2,7 +2,7 @@
   "name": "finance-splitter-web",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "npm@10.8.2",
+  "packageManager": "yarn@1.22.10",
   "engines": {
     "node": "20.x"
   },
