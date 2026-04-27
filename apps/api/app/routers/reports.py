@@ -1,10 +1,12 @@
+import json
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
-from app.models.schemas import DirectDownloadRequest, GenerateReportRequest, ReportResponse
-from app.services.report_service import build_report_file_bytes, generate_report, get_report
+from app.models.schemas import DirectDownloadRequest, GenerateConfig, GenerateReportRequest, ReportResponse
+from app.services.file_service import save_runtime_upload
+from app.services.report_service import build_report_file_bytes, build_report_file_bytes_from_path, generate_report, get_report
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
@@ -46,6 +48,24 @@ def download_report_direct(payload: DirectDownloadRequest):
         source_url=payload.source_url,
         source_filename=payload.source_filename,
     )
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    return StreamingResponse(
+        iter([content]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
+
+
+@router.post("/download-from-file")
+async def download_report_from_file(
+    file: UploadFile = File(...),
+    mapping_json: str = Form(...),
+    config_json: str = Form(...),
+):
+    mapping = json.loads(mapping_json)
+    config = GenerateConfig.model_validate(json.loads(config_json))
+    source_path = await save_runtime_upload(file)
+    content, filename = build_report_file_bytes_from_path(source_path, file.filename or "finance-data.xlsx", mapping, config)
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
     return StreamingResponse(
         iter([content]),

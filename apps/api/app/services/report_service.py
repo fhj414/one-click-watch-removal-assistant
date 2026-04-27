@@ -114,3 +114,38 @@ def build_report_file_bytes(
     content = path.read_bytes()
     filename = f"{Path(record['source_filename']).stem or 'finance-report'}-拆表结果.xlsx"
     return content, filename
+
+
+def build_report_file_bytes_from_path(source_path: Path, source_filename: str, mapping: dict[str, str], config: Any) -> tuple[bytes, str]:
+    raw_df = read_dataframe(source_path)
+    cleaned = normalize_dataframe(raw_df, mapping)
+    anomalies = check_anomalies(cleaned) if config.enable_anomaly_check else cleaned.iloc[0:0].copy()
+    base_tables = build_report_tables(cleaned, anomalies)
+    ai_payload, _, _ = build_ai_bp_insights(
+        cleaned,
+        anomalies,
+        build_metrics(base_tables),
+        base_tables["月度汇总表"],
+        base_tables["客户汇总表"],
+        base_tables["供应商汇总表"],
+        config.export_version,
+        config.ai_model,
+    )
+    bp_sheet = None
+    if config.enable_ai_enhance and ai_payload.get("sheet_rows"):
+        import pandas as pd
+
+        bp_sheet = pd.DataFrame(ai_payload["sheet_rows"])
+    tables = build_report_tables(cleaned, anomalies, bp_sheet=bp_sheet)
+    selected_sheets = set(config.sheets or [])
+    if selected_sheets:
+        from app.services.report_builder import SHEET_NAME_MAP
+
+        selected_names = {SHEET_NAME_MAP[key] for key in selected_sheets if key in SHEET_NAME_MAP}
+        tables = {name: table for name, table in tables.items() if name in selected_names}
+
+    output_path = EXPORT_DIR / f"download-{uuid.uuid4()}.xlsx"
+    export_workbook(tables, output_path, enable_formulas=config.enable_formulas)
+    content = output_path.read_bytes()
+    filename = f"{Path(source_filename).stem or 'finance-report'}-拆表结果.xlsx"
+    return content, filename

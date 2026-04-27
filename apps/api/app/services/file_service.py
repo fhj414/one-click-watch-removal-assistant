@@ -75,6 +75,16 @@ async def save_upload(file: UploadFile) -> dict[str, Any]:
     return record
 
 
+async def save_runtime_upload(file: UploadFile) -> Path:
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="仅支持 xlsx、xls、csv 文件")
+    stored_path = UPLOAD_DIR / f"runtime-{uuid.uuid4()}{suffix}"
+    with stored_path.open("wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    return stored_path
+
+
 def get_upload(upload_id: str) -> dict[str, Any]:
     record = read_json(HISTORY_DIR / f"upload-{upload_id}.json", None)
     if not record:

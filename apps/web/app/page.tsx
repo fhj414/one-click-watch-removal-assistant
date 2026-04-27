@@ -30,7 +30,7 @@ export default function HomePage() {
     setLoading(true);
     try {
       const result = await uploadFile(file);
-      setUpload(result);
+      setUpload(result, file);
       router.push("/mapping");
     } catch (err) {
       setError(err instanceof Error ? err.message : "上传失败");

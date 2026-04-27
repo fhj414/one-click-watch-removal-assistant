@@ -104,6 +104,37 @@ export async function downloadReport(downloadRequest: Record<string, unknown>) {
   URL.revokeObjectURL(url);
 }
 
+export async function downloadReportFromFile(
+  file: File,
+  mapping: Record<string, StandardField>,
+  config: GenerateConfig
+) {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("mapping_json", JSON.stringify(mapping));
+  form.append("config_json", JSON.stringify(config));
+  const response = await fetch(`${API_BASE}/api/reports/download-from-file`, {
+    method: "POST",
+    body: form
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `HTTP ${response.status}`);
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename=\"?([^"]+)\"?/);
+  const filename = match?.[1] || "财务数据一键拆表结果.xlsx";
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export async function getHistory() {
   const response = await fetch(`${API_BASE}/api/history`, { cache: "no-store" });
   return handleResponse(response);

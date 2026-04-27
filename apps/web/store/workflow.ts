@@ -6,10 +6,11 @@ import type { GenerateConfig, ReportResult, StandardField, UploadResult } from "
 
 type WorkflowState = {
   upload?: UploadResult;
+  sourceFile?: File;
   mapping: Record<string, StandardField>;
   config: GenerateConfig;
   report?: ReportResult;
-  setUpload: (upload: UploadResult) => void;
+  setUpload: (upload: UploadResult, sourceFile?: File) => void;
   setMappingField: (column: string, field: StandardField) => void;
   setConfig: (config: Partial<GenerateConfig>) => void;
   setReport: (report: ReportResult) => void;
@@ -47,11 +48,19 @@ export const useWorkflowStore = create<WorkflowState>()(
         ai_model: "",
         export_version: "finance"
       },
-      setUpload: (upload) => set({ upload, mapping: upload.suggested_mapping }),
+      setUpload: (upload, sourceFile) => set({ upload, sourceFile, mapping: upload.suggested_mapping }),
       setMappingField: (column, field) => set((state) => ({ mapping: { ...state.mapping, [column]: field } })),
       setConfig: (config) => set((state) => ({ config: { ...state.config, ...config } })),
       setReport: (report) => set({ report })
     }),
-    { name: "finance-splitter-workflow" }
+    {
+      name: "finance-splitter-workflow",
+      partialize: (state) => ({
+        upload: state.upload,
+        mapping: state.mapping,
+        config: state.config,
+        report: state.report
+      })
+    }
   )
 );

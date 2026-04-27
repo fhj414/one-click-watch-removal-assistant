@@ -7,19 +7,28 @@ import { AppShell } from "@/components/app-shell";
 import { DataTable } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { downloadReport } from "@/lib/api";
+import { downloadReport, downloadReportFromFile } from "@/lib/api";
 import { formatMoney } from "@/lib/utils";
 import { useWorkflowStore } from "@/store/workflow";
 
 export default function PreviewPage() {
   const report = useWorkflowStore((state) => state.report);
+  const sourceFile = useWorkflowStore((state) => state.sourceFile);
+  const mapping = useWorkflowStore((state) => state.mapping);
+  const config = useWorkflowStore((state) => state.config);
   const [downloading, setDownloading] = useState(false);
 
   const handleDownload = async () => {
-    if (!report?.download_request) return;
+    if (!report) return;
     setDownloading(true);
     try {
-      await downloadReport(report.download_request);
+      if (sourceFile) {
+        await downloadReportFromFile(sourceFile, mapping, config);
+      } else if (report.download_request) {
+        await downloadReport(report.download_request);
+      } else {
+        throw new Error("原始文件已丢失，请重新上传后再下载。");
+      }
     } finally {
       setDownloading(false);
     }
@@ -67,6 +76,7 @@ export default function PreviewPage() {
               <p className="mt-3 text-xs text-slate-500">
                 {report.ai_enabled ? `AI 增强已启用${report.ai_model ? ` · ${report.ai_model}` : ""}` : "当前为规则引擎摘要"}
               </p>
+              {!sourceFile && <p className="mt-2 text-xs text-amber-600">当前会话未保留原始文件，下载失败时请重新上传并生成。</p>}
             </CardContent>
           </Card>
 
