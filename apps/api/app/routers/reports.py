@@ -1,17 +1,23 @@
 from pathlib import Path
 
 from fastapi import APIRouter
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
-from app.models.schemas import GenerateReportRequest, ReportResponse
-from app.services.report_service import generate_report, get_report
+from app.models.schemas import DirectDownloadRequest, GenerateReportRequest, ReportResponse
+from app.services.report_service import build_report_file_bytes, generate_report, get_report
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 
 @router.post("/generate", response_model=ReportResponse)
 def create_report(payload: GenerateReportRequest):
-    record = generate_report(payload.upload_id, payload.mapping, payload.config)
+    record = generate_report(
+        payload.upload_id,
+        payload.mapping,
+        payload.config,
+        source_url=payload.source_url,
+        source_filename=payload.source_filename,
+    )
     return _response(record)
 
 
@@ -31,6 +37,23 @@ def download_report(report_id: str):
     )
 
 
+@router.post("/download-direct")
+def download_report_direct(payload: DirectDownloadRequest):
+    content, filename = build_report_file_bytes(
+        payload.upload_id,
+        payload.mapping,
+        payload.config,
+        source_url=payload.source_url,
+        source_filename=payload.source_filename,
+    )
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    return StreamingResponse(
+        iter([content]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
+
+
 def _response(record: dict):
     return {
         "report_id": record["id"],
@@ -42,4 +65,5 @@ def _response(record: dict):
         "boss_summary": record["boss_summary"],
         "ai_enabled": record.get("ai_enabled", False),
         "ai_model": record.get("ai_model"),
+        "download_request": record.get("download_request"),
     }

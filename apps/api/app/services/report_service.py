@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 import uuid
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
 
-from app.core.config import EXPORT_DIR, HISTORY_DIR, PREVIEW_LIMIT
+from app.core.config import EXPORT_DIR, HISTORY_DIR, IS_VERCEL, PREVIEW_LIMIT
 from app.core.storage import append_record, now_iso, read_json, write_json
 from app.services.anomaly_checker import anomaly_summary, check_anomalies
 from app.services.excel_exporter import export_workbook
-from app.services.file_service import get_upload, read_dataframe
+from app.services.file_service import read_dataframe, resolve_source
 from app.services.normalizer import dataframe_preview, normalize_dataframe
 from app.services.openrouter_service import build_ai_bp_insights
 from app.services.report_builder import boss_summary_text, build_metrics, build_report_tables
@@ -19,10 +20,9 @@ from app.services.report_builder import boss_summary_text, build_metrics, build_
 REPORT_INDEX = HISTORY_DIR / "reports.json"
 
 
-def generate_report(upload_id: str, mapping: dict[str, str], config: Any) -> dict[str, Any]:
-    upload = get_upload(upload_id)
+def generate_report(upload_id: str | None, mapping: dict[str, str], config: Any, source_url: str | None = None, source_filename: str | None = None) -> dict[str, Any]:
     report_id = str(uuid.uuid4())
-    source_path = Path(upload["stored_path"])
+    source_path, resolved_filename = resolve_source(upload_id, source_url, source_filename)
     raw_df = read_dataframe(source_path)
     cleaned = normalize_dataframe(raw_df, mapping)
     anomalies = check_anomalies(cleaned) if config.enable_anomaly_check else cleaned.iloc[0:0].copy()
@@ -72,6 +72,13 @@ def generate_report(upload_id: str, mapping: dict[str, str], config: Any) -> dic
         "preview": preview,
         "xlsx_path": str(output_path),
         "download_url": f"/api/reports/{report_id}/download",
+        "download_request": {
+            "upload_id": upload_id,
+            "source_url": source_url,
+            "source_filename": resolved_filename,
+            "mapping": mapping,
+            "config": config.model_dump(),
+        },
         "boss_summary": summary_text,
         "ai_enabled": bool(config.enable_ai_enhance and ai_enabled),
         "ai_model": ai_model if config.enable_ai_enhance else None,
@@ -80,10 +87,11 @@ def generate_report(upload_id: str, mapping: dict[str, str], config: Any) -> dic
         "recommended_actions": ai_payload.get("recommended_actions", []),
         "created_at": now_iso(),
         "finished_at": now_iso(),
-        "source_filename": upload["original_name"],
+        "source_filename": resolved_filename,
     }
-    write_json(HISTORY_DIR / f"report-{report_id}.json", record)
-    append_record(REPORT_INDEX, record)
+    if not IS_VERCEL:
+        write_json(HISTORY_DIR / f"report-{report_id}.json", record)
+        append_record(REPORT_INDEX, record)
     return record
 
 
@@ -92,3 +100,17 @@ def get_report(report_id: str) -> dict[str, Any]:
     if not record:
         raise HTTPException(status_code=404, detail="报表不存在")
     return record
+
+
+def build_report_file_bytes(
+    upload_id: str | None,
+    mapping: dict[str, str],
+    config: Any,
+    source_url: str | None = None,
+    source_filename: str | None = None,
+) -> tuple[bytes, str]:
+    record = generate_report(upload_id, mapping, config, source_url=source_url, source_filename=source_filename)
+    path = Path(record["xlsx_path"])
+    content = path.read_bytes()
+    filename = f"{Path(record['source_filename']).stem or 'finance-report'}-拆表结果.xlsx"
+    return content, filename

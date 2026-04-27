@@ -16,6 +16,7 @@ async def upload_file(file: UploadFile):
         "columns": record["columns"],
         "sample_rows": record["sample_rows"],
         "suggested_mapping": record["suggested_mapping"],
+        "storage_mode": "local",
     }
 
 

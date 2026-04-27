@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+import urllib.request
 import uuid
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,19 @@ def read_dataframe(path: Path) -> pd.DataFrame:
     if suffix in {".xlsx", ".xls"}:
         return pd.read_excel(path, dtype=str, keep_default_na=False)
     raise HTTPException(status_code=400, detail="仅支持 xlsx、xls、csv 文件")
+
+
+def fetch_remote_file(source_url: str, filename: str | None = None) -> Path:
+    suffix = Path(filename or source_url).suffix.lower() or ".xlsx"
+    if suffix not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="远程文件格式不受支持")
+    temp_path = UPLOAD_DIR / f"remote-{uuid.uuid4()}{suffix}"
+    try:
+        with urllib.request.urlopen(source_url, timeout=30) as response, temp_path.open("wb") as file:
+            shutil.copyfileobj(response, file)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"远程文件读取失败: {exc}") from exc
+    return temp_path
 
 
 def _json_safe_rows(df: pd.DataFrame, limit: int = 20) -> list[dict[str, Any]]:
@@ -66,3 +80,12 @@ def get_upload(upload_id: str) -> dict[str, Any]:
     if not record:
         raise HTTPException(status_code=404, detail="上传记录不存在")
     return record
+
+
+def resolve_source(upload_id: str | None = None, source_url: str | None = None, source_filename: str | None = None) -> tuple[Path, str]:
+    if upload_id:
+        record = get_upload(upload_id)
+        return Path(record["stored_path"]), record["original_name"]
+    if source_url:
+        return fetch_remote_file(source_url, source_filename), source_filename or Path(source_url).name
+    raise HTTPException(status_code=400, detail="缺少 upload_id 或 source_url")

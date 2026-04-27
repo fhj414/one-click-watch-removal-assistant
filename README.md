@@ -62,4 +62,5 @@ npm run dev
 
 - 产品与技术架构：`docs/ARCHITECTURE.md`
 - API 设计：`docs/API.md`
+- Vercel 部署：`docs/VERCEL_DEPLOY.md`
 - 示例数据：`sample_data/finance_sample.csv`

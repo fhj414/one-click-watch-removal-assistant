@@ -25,6 +25,7 @@ class UploadResponse(BaseModel):
     columns: list[str]
     sample_rows: list[dict[str, Any]]
     suggested_mapping: dict[str, StandardField]
+    storage_mode: str = "local"
 
 
 class TemplateCreate(BaseModel):
@@ -50,7 +51,9 @@ class GenerateConfig(BaseModel):
 
 
 class GenerateReportRequest(BaseModel):
-    upload_id: str
+    upload_id: str | None = None
+    source_url: str | None = None
+    source_filename: str | None = None
     mapping: dict[str, StandardField]
     config: GenerateConfig
     template_name: str | None = None
@@ -66,6 +69,7 @@ class ReportResponse(BaseModel):
     boss_summary: str
     ai_enabled: bool = False
     ai_model: str | None = None
+    download_request: dict[str, Any] | None = None
 
 
 class MappingResponse(BaseModel):
@@ -75,3 +79,11 @@ class MappingResponse(BaseModel):
     sample_rows: list[dict[str, Any]]
     suggested_mapping: dict[str, StandardField]
     templates: list[TemplateRecord]
+
+
+class DirectDownloadRequest(BaseModel):
+    upload_id: str | None = None
+    source_url: str | None = None
+    source_filename: str | None = None
+    mapping: dict[str, StandardField]
+    config: GenerateConfig

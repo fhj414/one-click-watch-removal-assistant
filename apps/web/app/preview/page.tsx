@@ -1,17 +1,29 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { Download } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { DataTable } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { fileUrl } from "@/lib/api";
+import { downloadReport } from "@/lib/api";
 import { formatMoney } from "@/lib/utils";
 import { useWorkflowStore } from "@/store/workflow";
 
 export default function PreviewPage() {
   const report = useWorkflowStore((state) => state.report);
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    if (!report?.download_request) return;
+    setDownloading(true);
+    try {
+      await downloadReport(report.download_request);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <AppShell>
@@ -21,12 +33,10 @@ export default function PreviewPage() {
           <p className="mt-2 text-sm text-slate-600">预览每张表前 20 行，确认后下载完整 xlsx。</p>
         </div>
         {report && (
-          <a href={fileUrl(report.download_url)}>
-            <Button>
-              <Download size={16} />
-              下载完整 Excel
-            </Button>
-          </a>
+          <Button onClick={handleDownload} disabled={downloading || !report.download_request}>
+            <Download size={16} />
+            {downloading ? "正在生成下载文件..." : "下载完整 Excel"}
+          </Button>
         )}
       </div>
 
