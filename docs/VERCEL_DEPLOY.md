@@ -17,8 +17,8 @@
 ## 2. 后端项目
 
 - Root Directory：`apps/api`
-- 入口文件：`app.py`
-- Vercel 会将 FastAPI 识别为单个 Python Function；官方支持的入口名包含 `app.py`、`index.py`、`server.py` 等。[FastAPI on Vercel](https://vercel.com/docs/frameworks/backend/fastapi)
+- 入口文件：`api/index.py`
+- Vercel 会从项目内的 `api/` 目录识别 Python Serverless Function；当前仓库已经改成 `api/index.py` 作为 FastAPI 入口。[FastAPI on Vercel](https://vercel.com/docs/frameworks/backend/fastapi)
 
 主要环境变量：
 
@@ -31,7 +31,7 @@
 
 本次改造已包含：
 
-- FastAPI 标准入口 `apps/api/app.py`
+- FastAPI 标准入口 `apps/api/api/index.py`
 - 在 Vercel 环境下自动使用 `/tmp/finance-splitter` 作为临时数据目录
 - 前端下载改为 `POST /api/reports/download-direct` 直出 xlsx，减少对持久磁盘的依赖
 - 可通过 `ALLOWED_ORIGINS` 配置线上 CORS 域名
