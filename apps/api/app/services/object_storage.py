@@ -7,6 +7,7 @@ from urllib.parse import quote
 
 import boto3
 from botocore.client import BaseClient
+from botocore.config import Config
 
 from app.core.config import (
     R2_ACCESS_KEY_ID,
@@ -28,7 +29,8 @@ def r2_enabled() -> bool:
 def build_object_key(prefix: str, filename: str) -> str:
     suffix = Path(filename).suffix.lower()
     stem = Path(filename).stem or "finance-file"
-    safe_stem = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "-" for ch in stem).strip("-") or "finance-file"
+    safe_stem = "".join(ch if ch.isascii() and (ch.isalnum() or ch in {"-", "_"}) else "-" for ch in stem)
+    safe_stem = safe_stem.strip("-")[:80] or "finance-file"
     return f"{prefix}/{safe_stem}-{uuid.uuid4()}{suffix}"
 
 
@@ -53,7 +55,6 @@ def create_presigned_upload(filename: str, content_type: str | None = None) -> d
         Params={
             "Bucket": R2_BUCKET_NAME,
             "Key": key,
-            "ContentType": content_type or guess_content_type(filename),
         },
         ExpiresIn=R2_PRESIGNED_EXPIRES,
         HttpMethod="PUT",
@@ -107,4 +108,5 @@ def _client() -> BaseClient:
         aws_access_key_id=R2_ACCESS_KEY_ID,
         aws_secret_access_key=R2_SECRET_ACCESS_KEY,
         region_name="auto",
+        config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
     )

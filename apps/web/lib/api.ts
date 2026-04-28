@@ -73,7 +73,8 @@ export async function uploadFile(file: File): Promise<UploadResult> {
         body: file
       });
       if (!uploadResponse.ok) {
-        throw new Error("上传到对象存储失败");
+        const detail = await uploadResponse.text();
+        throw new Error(detail || "上传到对象存储失败");
       }
       const completeResponse = await fetch(`${API_BASE}/api/uploads/complete`, {
         method: "POST",
