@@ -26,6 +26,7 @@ type UploadInitResponse = {
   upload_url?: string | null;
   object_key?: string | null;
   expires_in?: number | null;
+  storage_error?: string | null;
 };
 
 export type GenerateConfig = {

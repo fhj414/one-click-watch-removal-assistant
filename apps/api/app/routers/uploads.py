@@ -12,7 +12,10 @@ router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 def init_upload(payload: UploadInitRequest):
     if not r2_enabled():
         return {"storage_mode": "local"}
-    return create_presigned_upload(payload.filename, payload.content_type)
+    try:
+        return create_presigned_upload(payload.filename, payload.content_type)
+    except Exception as exc:
+        return {"storage_mode": "local", "storage_error": f"R2 配置异常: {exc}"}
 
 
 @router.post("/complete", response_model=UploadResponse)

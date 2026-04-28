@@ -38,6 +38,7 @@ class UploadInitResponse(BaseModel):
     upload_url: str | None = None
     object_key: str | None = None
     expires_in: int | None = None
+    storage_error: str | None = None
 
 
 class RemoteUploadCreate(BaseModel):
