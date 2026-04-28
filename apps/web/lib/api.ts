@@ -21,6 +21,13 @@ export type UploadResult = {
   storage_mode?: string;
 };
 
+type UploadInitResponse = {
+  storage_mode: "local" | "r2";
+  upload_url?: string | null;
+  object_key?: string | null;
+  expires_in?: number | null;
+};
+
 export type GenerateConfig = {
   sheets: string[];
   enable_anomaly_check: boolean;
@@ -51,6 +58,35 @@ export function fileUrl(path: string) {
 }
 
 export async function uploadFile(file: File): Promise<UploadResult> {
+  const initResponse = await fetch(`${API_BASE}/api/uploads/init`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filename: file.name, content_type: file.type || "application/octet-stream" })
+  });
+  if (initResponse.ok) {
+    const initPayload = (await initResponse.json()) as UploadInitResponse;
+    if (initPayload.storage_mode === "r2" && initPayload.upload_url && initPayload.object_key) {
+      const uploadResponse = await fetch(initPayload.upload_url, {
+        method: "PUT",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file
+      });
+      if (!uploadResponse.ok) {
+        throw new Error("上传到对象存储失败");
+      }
+      const completeResponse = await fetch(`${API_BASE}/api/uploads/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          object_key: initPayload.object_key,
+          filename: file.name,
+          content_type: file.type || "application/octet-stream"
+        })
+      });
+      return handleResponse(completeResponse);
+    }
+  }
+
   const form = new FormData();
   form.append("file", file);
   const response = await fetch(`${API_BASE}/api/uploads`, { method: "POST", body: form });
@@ -91,17 +127,7 @@ export async function downloadReport(downloadRequest: Record<string, unknown>) {
     throw new Error(text || `HTTP ${response.status}`);
   }
   const blob = await response.blob();
-  const disposition = response.headers.get("Content-Disposition") || "";
-  const match = disposition.match(/filename=\"?([^"]+)\"?/);
-  const filename = match?.[1] || "财务数据一键拆表结果.xlsx";
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  downloadBlob(blob, extractFilename(response.headers.get("Content-Disposition")), "财务数据一键拆表结果.xlsx");
 }
 
 export async function downloadReportFromFile(
@@ -122,17 +148,18 @@ export async function downloadReportFromFile(
     throw new Error(text || `HTTP ${response.status}`);
   }
   const blob = await response.blob();
-  const disposition = response.headers.get("Content-Disposition") || "";
-  const match = disposition.match(/filename=\"?([^"]+)\"?/);
-  const filename = match?.[1] || "财务数据一键拆表结果.xlsx";
-  const url = URL.createObjectURL(blob);
+  downloadBlob(blob, extractFilename(response.headers.get("Content-Disposition")), "财务数据一键拆表结果.xlsx");
+}
+
+export function downloadFromUrl(url: string, filename?: string) {
   const link = document.createElement("a");
   link.href = url;
-  link.download = filename;
+  if (filename) link.download = filename;
+  link.target = "_blank";
+  link.rel = "noopener";
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
 }
 
 export async function getHistory() {
@@ -146,4 +173,25 @@ async function handleResponse<T = any>(response: Response): Promise<T> {
     throw new Error(text || `HTTP ${response.status}`);
   }
   return response.json();
+}
+
+function extractFilename(contentDisposition: string | null): string | null {
+  if (!contentDisposition) return null;
+  const utf8Match = contentDisposition.match(/filename\*\=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+  const basicMatch = contentDisposition.match(/filename=\"?([^"]+)\"?/i);
+  return basicMatch?.[1] || null;
+}
+
+function downloadBlob(blob: Blob, filename: string | null, fallbackName: string) {
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = filename || fallbackName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(objectUrl);
 }

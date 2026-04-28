@@ -14,6 +14,7 @@ from app.services.excel_exporter import export_workbook
 from app.services.file_service import read_dataframe, resolve_source
 from app.services.normalizer import dataframe_preview, normalize_dataframe
 from app.services.openrouter_service import build_ai_bp_insights
+from app.services.object_storage import build_export_key, guess_content_type, presigned_download_url, r2_enabled, upload_file
 from app.services.report_builder import boss_summary_text, build_metrics, build_report_tables
 
 
@@ -53,6 +54,7 @@ def generate_report(upload_id: str | None, mapping: dict[str, str], config: Any,
         selected_names = {SHEET_NAME_MAP[key] for key in selected_sheets if key in SHEET_NAME_MAP}
         tables = {name: table for name, table in tables.items() if name in selected_names}
 
+    export_filename = f"{Path(resolved_filename).stem or 'finance-report'}-拆表结果.xlsx"
     output_path = EXPORT_DIR / f"{report_id}.xlsx"
     export_workbook(tables, output_path, enable_formulas=config.enable_formulas)
 
@@ -90,6 +92,11 @@ def generate_report(upload_id: str | None, mapping: dict[str, str], config: Any,
         "finished_at": now_iso(),
         "source_filename": resolved_filename,
     }
+    if r2_enabled():
+        export_key = build_export_key(export_filename)
+        upload_file(output_path, export_key, guess_content_type(export_filename))
+        record["download_url"] = presigned_download_url(export_key, export_filename)
+        record["export_storage_key"] = export_key
     if not IS_VERCEL:
         write_json(HISTORY_DIR / f"report-{report_id}.json", record)
         append_record(REPORT_INDEX, record)

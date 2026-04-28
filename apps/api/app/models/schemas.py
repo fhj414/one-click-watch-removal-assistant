@@ -28,6 +28,24 @@ class UploadResponse(BaseModel):
     storage_mode: str = "local"
 
 
+class UploadInitRequest(BaseModel):
+    filename: str = Field(min_length=1, max_length=255)
+    content_type: str | None = None
+
+
+class UploadInitResponse(BaseModel):
+    storage_mode: str
+    upload_url: str | None = None
+    object_key: str | None = None
+    expires_in: int | None = None
+
+
+class RemoteUploadCreate(BaseModel):
+    object_key: str
+    filename: str = Field(min_length=1, max_length=255)
+    content_type: str | None = None
+
+
 class TemplateCreate(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     mapping: dict[str, StandardField]

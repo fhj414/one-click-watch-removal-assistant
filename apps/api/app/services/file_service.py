@@ -12,6 +12,7 @@ from fastapi import HTTPException, UploadFile
 from app.core.config import ALLOWED_EXTENSIONS, HISTORY_DIR, UPLOAD_DIR
 from app.core.storage import append_record, now_iso, read_json, write_json
 from app.services.field_detector import detect_mapping
+from app.services.object_storage import download_to_temp, presigned_download_url, r2_enabled
 
 
 UPLOAD_INDEX = HISTORY_DIR / "uploads.json"
@@ -75,6 +76,39 @@ async def save_upload(file: UploadFile) -> dict[str, Any]:
     return record
 
 
+def register_remote_upload(object_key: str, filename: str, content_type: str | None = None) -> dict[str, Any]:
+    if not r2_enabled():
+        raise HTTPException(status_code=400, detail="对象存储未启用")
+    suffix = Path(filename).suffix.lower()
+    if suffix not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="仅支持 xlsx、xls、csv 文件")
+
+    upload_id = str(uuid.uuid4())
+    source_path = download_to_temp(object_key, filename)
+    df = read_dataframe(source_path)
+    columns = [str(column) for column in df.columns]
+    sample_rows = _json_safe_rows(df)
+    suggested_mapping = detect_mapping(columns, sample_rows)
+    record = {
+        "id": upload_id,
+        "original_name": filename,
+        "stored_path": "",
+        "file_type": suffix.lstrip("."),
+        "rows_count": int(len(df)),
+        "columns": columns,
+        "sample_rows": sample_rows,
+        "suggested_mapping": suggested_mapping,
+        "created_at": now_iso(),
+        "storage_mode": "r2",
+        "storage_key": object_key,
+        "source_url": presigned_download_url(object_key, filename),
+        "content_type": content_type,
+    }
+    write_json(HISTORY_DIR / f"upload-{upload_id}.json", record)
+    append_record(UPLOAD_INDEX, record)
+    return record
+
+
 async def save_runtime_upload(file: UploadFile) -> Path:
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in ALLOWED_EXTENSIONS:
@@ -95,6 +129,8 @@ def get_upload(upload_id: str) -> dict[str, Any]:
 def resolve_source(upload_id: str | None = None, source_url: str | None = None, source_filename: str | None = None) -> tuple[Path, str]:
     if upload_id:
         record = get_upload(upload_id)
+        if record.get("storage_key") and r2_enabled():
+            return download_to_temp(record["storage_key"], record["original_name"]), record["original_name"]
         return Path(record["stored_path"]), record["original_name"]
     if source_url:
         return fetch_remote_file(source_url, source_filename), source_filename or Path(source_url).name

@@ -6,3 +6,4 @@ pydantic==2.10.5
 python-multipart==0.0.20
 python-dotenv==1.2.2
 xlrd==2.0.1
+boto3==1.39.14

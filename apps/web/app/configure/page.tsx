@@ -110,13 +110,14 @@ export default function ConfigurePage() {
                 <p className="mb-2 text-sm font-medium">AI 模型（可选覆盖）</p>
                 <Select value={config.ai_model || ""} onChange={(event) => setConfig({ ai_model: event.target.value })}>
                   <option value="">默认模型</option>
+                  <option value="qwen/qwen3-30b-a3b">Qwen3 30B A3B</option>
+                  <option value="deepseek/deepseek-chat-v3-0324">DeepSeek V3 0324</option>
+                  <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
                   <option value="qwen/qwen-2.5-72b-instruct">Qwen 2.5 72B Instruct</option>
-                  <option value="google/gemini-2.0-flash-001">Gemini 2.0 Flash</option>
-                  <option value="deepseek/deepseek-chat">DeepSeek V3</option>
                   <option value="anthropic/claude-3.5-haiku">Claude 3.5 Haiku</option>
                 </Select>
                 <p className="mt-2 text-xs leading-5 text-slate-500">
-                  推荐用于财务 BP：默认用高性价比模型，AI 会补充经营结论、风险提示、动作建议和洞察 sheet。
+                  推荐用于财务 BP：默认用更快的高性价比模型，AI 会补充经营结论、风险提示、动作建议和洞察 sheet。
                 </p>
               </div>
               <div>

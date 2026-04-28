@@ -1,10 +1,31 @@
 from fastapi import APIRouter, UploadFile
 
-from app.models.schemas import MappingResponse, UploadResponse
-from app.services.file_service import get_upload, save_upload
+from app.models.schemas import MappingResponse, RemoteUploadCreate, UploadInitRequest, UploadInitResponse, UploadResponse
+from app.services.file_service import get_upload, register_remote_upload, save_upload
+from app.services.object_storage import create_presigned_upload, r2_enabled
 from app.services.template_service import list_templates
 
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
+
+
+@router.post("/init", response_model=UploadInitResponse)
+def init_upload(payload: UploadInitRequest):
+    if not r2_enabled():
+        return {"storage_mode": "local"}
+    return create_presigned_upload(payload.filename, payload.content_type)
+
+
+@router.post("/complete", response_model=UploadResponse)
+def complete_upload(payload: RemoteUploadCreate):
+    record = register_remote_upload(payload.object_key, payload.filename, payload.content_type)
+    return {
+        "upload_id": record["id"],
+        "filename": record["original_name"],
+        "columns": record["columns"],
+        "sample_rows": record["sample_rows"],
+        "suggested_mapping": record["suggested_mapping"],
+        "storage_mode": record.get("storage_mode", "r2"),
+    }
 
 
 @router.post("", response_model=UploadResponse)

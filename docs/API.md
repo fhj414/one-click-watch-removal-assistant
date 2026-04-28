@@ -2,6 +2,52 @@
 
 默认后端地址：`http://127.0.0.1:8000`
 
+## POST /api/uploads/init
+
+初始化上传策略。
+
+请求：
+
+```json
+{
+  "filename": "raw.xlsx",
+  "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+}
+```
+
+响应（启用 R2 时）：
+
+```json
+{
+  "storage_mode": "r2",
+  "upload_url": "https://...",
+  "object_key": "uploads/raw-uuid.xlsx",
+  "expires_in": 3600
+}
+```
+
+响应（未启用 R2 时）：
+
+```json
+{
+  "storage_mode": "local"
+}
+```
+
+## POST /api/uploads/complete
+
+当文件已经直传到 R2 后，通知后端拉取样本并完成字段识别。
+
+请求：
+
+```json
+{
+  "object_key": "uploads/raw-uuid.xlsx",
+  "filename": "raw.xlsx",
+  "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+}
+```
+
 ## POST /api/uploads
 
 上传 Excel 或 CSV 文件。
@@ -20,7 +66,8 @@
   "filename": "raw.csv",
   "columns": ["日期", "金额"],
   "sample_rows": [{ "日期": "2026-01-01", "金额": "1000" }],
-  "suggested_mapping": { "日期": "date", "金额": "amount" }
+  "suggested_mapping": { "日期": "date", "金额": "amount" },
+  "storage_mode": "local"
 }
 ```
 
@@ -83,6 +130,8 @@
   "download_url": "/api/reports/uuid/download"
 }
 ```
+
+启用 R2 后，`download_url` 会返回一个对象存储签名下载地址，前端可直接跳转下载，避免再次重算。
 
 ## GET /api/reports/{report_id}
 
