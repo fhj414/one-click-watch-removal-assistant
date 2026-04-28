@@ -22,6 +22,13 @@ SHEET_NAME_MAP = {
     "project_profitability": "项目盈利测算表",
     "customer_risk": "客户回款风险表",
     "working_capital": "营运资金关注表",
+    "product_line": "产品线经营表",
+    "budget_variance": "预算执行偏差表",
+    "expense_owner": "费用归口分析表",
+    "supplier_type": "供应商类型分析表",
+    "region": "区域经营表",
+    "collection_status": "回款状态跟踪表",
+    "bp_field_guide": "BP字段应用建议表",
 }
 
 
@@ -39,6 +46,13 @@ def build_report_tables(cleaned: pd.DataFrame, anomalies: pd.DataFrame, bp_sheet
     project_profitability = _project_profitability(cleaned)
     customer_risk = _customer_risk(cleaned, anomalies)
     working_capital = _working_capital_watch(cleaned, anomalies, customer, supplier)
+    product_line = _dimension_performance(cleaned, "产品线", "产品线经营表")
+    budget_variance = _budget_variance(cleaned)
+    expense_owner = _expense_owner_analysis(expense)
+    supplier_type = _supplier_type_analysis(expense)
+    region = _dimension_performance(cleaned, "区域", "区域经营表")
+    collection_status = _collection_status_watch(cleaned)
+    bp_field_guide = _bp_field_guide(cleaned)
     summary = _management_summary(cleaned, income, expense, customer, supplier, monthly, anomalies)
 
     tables = {
@@ -55,6 +69,13 @@ def build_report_tables(cleaned: pd.DataFrame, anomalies: pd.DataFrame, bp_sheet
         "项目盈利测算表": project_profitability,
         "客户回款风险表": customer_risk,
         "营运资金关注表": working_capital,
+        "产品线经营表": product_line,
+        "预算执行偏差表": budget_variance,
+        "费用归口分析表": expense_owner,
+        "供应商类型分析表": supplier_type,
+        "区域经营表": region,
+        "回款状态跟踪表": collection_status,
+        "BP字段应用建议表": bp_field_guide,
         "异常数据表": anomalies,
         "管理摘要表": summary,
     }
@@ -261,6 +282,159 @@ def _working_capital_watch(
         }
     )
     return pd.DataFrame(rows)
+
+
+def _dimension_performance(cleaned: pd.DataFrame, dimension: str, sheet_name: str) -> pd.DataFrame:
+    columns = [dimension, "收入", "支出", "净额", "收入占比", "支出占比", "费用率", "记录数", "BP关注"]
+    if cleaned.empty or not _has_value(cleaned, dimension):
+        return pd.DataFrame(columns=columns)
+    result = (
+        cleaned.assign(
+            收入=cleaned.apply(lambda row: row["金额"] if row["收支方向"] == "收入" and pd.notna(row["金额"]) else 0, axis=1),
+            支出=cleaned.apply(lambda row: abs(row["金额"]) if row["收支方向"] == "支出" and pd.notna(row["金额"]) else 0, axis=1),
+        )
+        .groupby(dimension, dropna=False)
+        .agg(收入=("收入", "sum"), 支出=("支出", "sum"), 净额=("净额", "sum"), 记录数=("原始行号", "count"))
+        .reset_index()
+    )
+    total_income = result["收入"].sum()
+    total_expense = result["支出"].sum()
+    result["收入占比"] = result["收入"] / total_income if total_income else 0
+    result["支出占比"] = result["支出"] / total_expense if total_expense else 0
+    result["费用率"] = result.apply(lambda row: row["支出"] / row["收入"] if row["收入"] else 0, axis=1)
+    result["BP关注"] = result.apply(lambda row: _dimension_commentary(row, dimension), axis=1)
+    return result[columns].sort_values("净额", ascending=False)
+
+
+def _budget_variance(cleaned: pd.DataFrame) -> pd.DataFrame:
+    columns = ["预算版本", "部门", "项目", "预算金额", "实际净额", "偏差金额", "达成率", "记录数", "BP关注"]
+    if cleaned.empty or not _has_value(cleaned, "预算金额"):
+        return pd.DataFrame(columns=columns)
+    group_cols = [column for column in ["预算版本", "部门", "项目"] if _has_value(cleaned, column)] or ["预算版本"]
+    result = (
+        cleaned.groupby(group_cols, dropna=False)
+        .agg(预算金额=("预算金额", "sum"), 实际净额=("净额", "sum"), 记录数=("原始行号", "count"))
+        .reset_index()
+    )
+    result["偏差金额"] = result["实际净额"] - result["预算金额"]
+    result["达成率"] = result.apply(lambda row: row["实际净额"] / row["预算金额"] if row["预算金额"] else 0, axis=1)
+    result["BP关注"] = result.apply(_budget_commentary, axis=1)
+    for column in columns:
+        if column not in result.columns:
+            result[column] = ""
+    return result[columns].sort_values("偏差金额")
+
+
+def _expense_owner_analysis(expense: pd.DataFrame) -> pd.DataFrame:
+    columns = ["费用归口", "部门", "项目", "支出金额", "记录数", "占比", "BP关注"]
+    if expense.empty or not _has_value(expense, "费用归口"):
+        return pd.DataFrame(columns=columns)
+    group_cols = [column for column in ["费用归口", "部门", "项目"] if _has_value(expense, column)] or ["费用归口"]
+    result = expense.groupby(group_cols, dropna=False).agg(支出金额=("金额", "sum"), 记录数=("原始行号", "count")).reset_index()
+    total = result["支出金额"].fillna(0).sum()
+    result["占比"] = result["支出金额"] / total if total else 0
+    result["BP关注"] = result["占比"].apply(lambda value: "高占比费用，建议核查预算归口和节超原因" if value >= 0.2 else "常规跟踪")
+    for column in columns:
+        if column not in result.columns:
+            result[column] = ""
+    return result[columns].sort_values("支出金额", ascending=False)
+
+
+def _supplier_type_analysis(expense: pd.DataFrame) -> pd.DataFrame:
+    columns = ["供应商类型", "支出金额", "供应商数", "记录数", "占比", "BP关注"]
+    if expense.empty or not _has_value(expense, "供应商类型"):
+        return pd.DataFrame(columns=columns)
+    result = (
+        expense.groupby("供应商类型", dropna=False)
+        .agg(支出金额=("金额", "sum"), 供应商数=("供应商", "nunique"), 记录数=("原始行号", "count"))
+        .reset_index()
+    )
+    total = result["支出金额"].fillna(0).sum()
+    result["占比"] = result["支出金额"] / total if total else 0
+    result["BP关注"] = result["占比"].apply(lambda value: "供应商类型支出集中，建议结合采购策略复盘" if value >= 0.35 else "常规跟踪")
+    return result[columns].sort_values("支出金额", ascending=False)
+
+
+def _collection_status_watch(cleaned: pd.DataFrame) -> pd.DataFrame:
+    columns = ["回款状态", "客户", "收入金额", "订单数", "最近回款日期", "最近到期日期", "BP关注"]
+    income = cleaned[cleaned["收支方向"] == "收入"].copy()
+    if income.empty or not (_has_value(income, "回款状态") or _has_value(income, "回款日期") or _has_value(income, "到期日期")):
+        return pd.DataFrame(columns=columns)
+    group_cols = [column for column in ["回款状态", "客户"] if _has_value(income, column)] or ["客户"]
+    result = (
+        income.groupby(group_cols, dropna=False)
+        .agg(收入金额=("金额", "sum"), 订单数=("订单号", "count"), 最近回款日期=("回款日期", "max"), 最近到期日期=("到期日期", "max"))
+        .reset_index()
+    )
+    result["BP关注"] = result.apply(_collection_commentary, axis=1)
+    for column in columns:
+        if column not in result.columns:
+            result[column] = ""
+    return result[columns].sort_values("收入金额", ascending=False)
+
+
+def _bp_field_guide(cleaned: pd.DataFrame) -> pd.DataFrame:
+    field_actions = {
+        "业务单元": "用于区分 BU/BG 经营贡献，适合经营会按组织口径复盘。",
+        "产品线": "用于产品线收入、费用、净额和资源投入产出分析。",
+        "产品型号": "用于 SKU/机型盈利测算和异常波动追踪。",
+        "区域": "用于国内/海外、区域市场收入质量和费用效率分析。",
+        "预算版本": "用于预算、Forecast、实际数之间的口径对齐。",
+        "预算金额": "用于预算执行偏差、达成率和节超说明。",
+        "费用归口": "用于费用科目归属、预算责任人和节超治理。",
+        "客户账期": "用于应收风险、回款周期和现金流预测。",
+        "回款状态": "用于回款风险分层和经营现金流跟踪。",
+        "供应商类型": "用于采购结构、供应商集中度和成本策略复盘。",
+    }
+    rows = []
+    for field, action in field_actions.items():
+        rows.append(
+            {
+                "字段": field,
+                "是否识别": "是" if _has_value(cleaned, field) else "否",
+                "BP用途": action,
+                "建议动作": "纳入动态报表" if _has_value(cleaned, field) else "建议在源表补充该字段",
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _has_value(df: pd.DataFrame, column: str) -> bool:
+    if column not in df.columns or df.empty:
+        return False
+    if pd.api.types.is_datetime64_any_dtype(df[column]) or pd.api.types.is_numeric_dtype(df[column]):
+        return bool(df[column].notna().any())
+    values = df[column].fillna("").astype(str).str.strip()
+    return bool(values[values != ""].any())
+
+
+def _dimension_commentary(row: pd.Series, dimension: str) -> str:
+    if row["收入"] == 0 and row["支出"] > 0:
+        return f"{dimension}仅有支出，需核查收入确认或费用归集"
+    if row["费用率"] >= 0.5 and row["收入"] > 0:
+        return f"{dimension}费用率偏高，建议复盘资源投入效率"
+    if row["收入占比"] >= 0.4:
+        return f"{dimension}收入贡献集中，需关注持续性和回款质量"
+    return "常规跟踪"
+
+
+def _budget_commentary(row: pd.Series) -> str:
+    if row["预算金额"] == 0:
+        return "缺少预算金额，无法判断达成率"
+    if row["达成率"] < 0.8:
+        return "低于预算，需解释收入或费用执行偏差"
+    if row["达成率"] > 1.2:
+        return "高于预算，需确认一次性因素或预算口径"
+    return "执行进度相对正常"
+
+
+def _collection_commentary(row: pd.Series) -> str:
+    status = str(row.get("回款状态", ""))
+    if any(keyword in status for keyword in ["逾期", "未回", "未收", "风险"]):
+        return "回款风险较高，建议建立专项跟踪清单"
+    if row.get("最近到期日期") and not row.get("最近回款日期"):
+        return "存在到期信息，建议核对实际回款状态"
+    return "常规跟踪"
 
 
 def _management_summary(

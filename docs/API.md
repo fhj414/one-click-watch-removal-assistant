@@ -127,7 +127,13 @@
   "preview": {
     "原始清洗表": [{ "日期": "2026-01-01" }]
   },
-  "download_url": "/api/reports/uuid/download"
+  "download_url": "/api/reports/uuid/download",
+  "report_plan": {
+    "data_type_label": "经营流水综合分析",
+    "recommended_sheets": ["原始清洗表", "客户汇总表", "费用结构表"],
+    "bp_focus": ["客户集中度", "费用结构"],
+    "missing_fields": ["预算金额", "回款状态/回款日期"]
+  }
 }
 ```
 

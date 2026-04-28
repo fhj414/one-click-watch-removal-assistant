@@ -6,6 +6,15 @@ import pandas as pd
 
 
 CORE_SHEETS = ["原始清洗表", "异常数据表", "管理摘要表"]
+DYNAMIC_BP_SHEETS = {
+    "产品线经营表",
+    "预算执行偏差表",
+    "费用归口分析表",
+    "供应商类型分析表",
+    "区域经营表",
+    "回款状态跟踪表",
+    "BP字段应用建议表",
+}
 
 
 def build_report_plan(cleaned: pd.DataFrame, anomalies: pd.DataFrame) -> dict[str, Any]:
@@ -19,6 +28,12 @@ def build_report_plan(cleaned: pd.DataFrame, anomalies: pd.DataFrame) -> dict[st
     has_department = _has_real_values(cleaned, "部门")
     has_project = _has_real_values(cleaned, "项目")
     has_month = _has_real_values(cleaned, "月份")
+    has_product_line = _has_real_values(cleaned, "产品线")
+    has_budget = _has_real_values(cleaned, "预算金额")
+    has_expense_owner = _has_real_values(cleaned, "费用归口")
+    has_supplier_type = _has_real_values(cleaned, "供应商类型")
+    has_region = _has_real_values(cleaned, "区域")
+    has_collection_status = any(_has_real_values(cleaned, column) for column in ["回款状态", "回款日期", "到期日期", "客户账期"])
     anomaly_count = int(len(anomalies))
 
     recommended: list[str] = ["原始清洗表"]
@@ -60,6 +75,36 @@ def build_report_plan(cleaned: pd.DataFrame, anomalies: pd.DataFrame) -> dict[st
     else:
         missing_fields.append("项目/产品线")
 
+    if has_product_line:
+        recommended.append("产品线经营表")
+        focus.extend(["产品线贡献", "产品组合"])
+        reasons.append("检测到产品线/型号字段，增加产品维度经营贡献分析。")
+
+    if has_budget:
+        recommended.append("预算执行偏差表")
+        focus.extend(["预算执行", "Forecast偏差"])
+        reasons.append("检测到预算字段，增加预算执行偏差和达成率分析。")
+    else:
+        missing_fields.append("预算金额")
+
+    if has_expense_owner:
+        recommended.append("费用归口分析表")
+        focus.extend(["费用归口", "节超治理"])
+
+    if has_supplier_type:
+        recommended.append("供应商类型分析表")
+        focus.append("采购结构")
+
+    if has_region:
+        recommended.append("区域经营表")
+        focus.append("区域经营贡献")
+
+    if has_collection_status:
+        recommended.append("回款状态跟踪表")
+        focus.extend(["回款状态", "现金流风险"])
+    else:
+        missing_fields.append("回款状态/回款日期")
+
     if has_income or has_expense:
         recommended.append("营运资金关注表")
         focus.append("营运资金")
@@ -68,7 +113,7 @@ def build_report_plan(cleaned: pd.DataFrame, anomalies: pd.DataFrame) -> dict[st
         focus.append("数据治理")
         reasons.append(f"检测到 {anomaly_count} 条异常，保留异常数据表用于月结前清理。")
 
-    recommended.extend(["异常数据表", "管理摘要表", "财务BP洞察表"])
+    recommended.extend(["异常数据表", "管理摘要表", "财务BP洞察表", "BP字段应用建议表"])
     return {
         "data_type": data_type,
         "data_type_label": _data_type_label(data_type),
@@ -86,7 +131,7 @@ def build_report_plan(cleaned: pd.DataFrame, anomalies: pd.DataFrame) -> dict[st
 def apply_report_plan(tables: dict[str, pd.DataFrame], plan: dict[str, Any], selected_sheet_names: set[str] | None = None) -> dict[str, pd.DataFrame]:
     planned_names = set(plan.get("recommended_sheets") or [])
     if selected_sheet_names:
-        planned_names &= selected_sheet_names
+        planned_names = (planned_names & selected_sheet_names) | (planned_names & DYNAMIC_BP_SHEETS)
     keep_names = planned_names | {name for name in CORE_SHEETS if name in tables}
     return {name: table for name, table in tables.items() if name in keep_names}
 

@@ -10,8 +10,8 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
 
-MONEY_HEADERS = {"金额", "净额", "收入", "支出", "收入金额", "支出金额", "数值"}
-DATE_HEADERS = {"日期"}
+MONEY_HEADERS = {"金额", "净额", "收入", "支出", "收入金额", "支出金额", "数值", "预算金额", "实际净额", "偏差金额"}
+DATE_HEADERS = {"日期", "回款日期", "到期日期", "最近回款日期", "最近到期日期"}
 
 
 def export_workbook(tables: dict[str, pd.DataFrame], output_path: Path, enable_formulas: bool = True) -> None:

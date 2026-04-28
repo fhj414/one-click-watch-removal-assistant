@@ -30,6 +30,13 @@ export const sheetOptions = [
   ["project_profitability", "项目盈利测算表"],
   ["customer_risk", "客户回款风险表"],
   ["working_capital", "营运资金关注表"],
+  ["product_line", "产品线经营表"],
+  ["budget_variance", "预算执行偏差表"],
+  ["expense_owner", "费用归口分析表"],
+  ["supplier_type", "供应商类型分析表"],
+  ["region", "区域经营表"],
+  ["collection_status", "回款状态跟踪表"],
+  ["bp_field_guide", "BP字段应用建议表"],
   ["anomalies", "异常数据表"],
   ["summary", "管理摘要表"],
   ["bp_insights", "财务BP洞察表"]

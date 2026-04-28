@@ -129,6 +129,7 @@ def build_report_file_bytes_from_path(source_path: Path, source_filename: str, m
     raw_df = read_dataframe(source_path)
     cleaned = normalize_dataframe(raw_df, mapping)
     anomalies = check_anomalies(cleaned) if config.enable_anomaly_check else cleaned.iloc[0:0].copy()
+    report_plan = build_report_plan(cleaned, anomalies)
     base_tables = build_report_tables(cleaned, anomalies)
     ai_payload, _, _ = build_ai_bp_insights(
         cleaned,
@@ -148,11 +149,12 @@ def build_report_file_bytes_from_path(source_path: Path, source_filename: str, m
         bp_sheet = pd.DataFrame(ai_payload["sheet_rows"])
     tables = build_report_tables(cleaned, anomalies, bp_sheet=bp_sheet)
     selected_sheets = set(config.sheets or [])
+    selected_names: set[str] | None = None
     if selected_sheets:
         from app.services.report_builder import SHEET_NAME_MAP
 
         selected_names = {SHEET_NAME_MAP[key] for key in selected_sheets if key in SHEET_NAME_MAP}
-        tables = {name: table for name, table in tables.items() if name in selected_names}
+    tables = apply_report_plan(tables, report_plan, selected_names)
 
     output_path = EXPORT_DIR / f"download-{uuid.uuid4()}.xlsx"
     export_workbook(tables, output_path, enable_formulas=config.enable_formulas)
