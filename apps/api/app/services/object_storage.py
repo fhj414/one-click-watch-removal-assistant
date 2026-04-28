@@ -8,6 +8,7 @@ from urllib.parse import quote
 import boto3
 from botocore.client import BaseClient
 from botocore.config import Config
+from botocore.exceptions import BotoCoreError, ClientError
 
 from app.core.config import (
     R2_ACCESS_KEY_ID,
@@ -69,15 +70,27 @@ def create_presigned_upload(filename: str, content_type: str | None = None) -> d
 
 def upload_file(local_path: Path, object_key: str, content_type: str | None = None) -> None:
     client = _client()
-    extra_args = {"ContentType": content_type or guess_content_type(local_path.name)}
-    client.upload_file(str(local_path), R2_BUCKET_NAME, object_key, ExtraArgs=extra_args)
+    try:
+        client.put_object(
+            Bucket=R2_BUCKET_NAME,
+            Key=object_key,
+            Body=local_path.read_bytes(),
+            ContentType=content_type or guess_content_type(local_path.name),
+        )
+    except (BotoCoreError, ClientError) as exc:
+        raise RuntimeError(f"R2 写入失败: {_error_message(exc)}") from exc
 
 
 def download_to_temp(object_key: str, filename: str | None = None) -> Path:
     suffix = Path(filename or object_key).suffix.lower() or ".xlsx"
     local_path = UPLOAD_DIR / f"r2-{uuid.uuid4()}{suffix}"
     client = _client()
-    client.download_file(R2_BUCKET_NAME, object_key, str(local_path))
+    try:
+        response = client.get_object(Bucket=R2_BUCKET_NAME, Key=object_key)
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        local_path.write_bytes(response["Body"].read())
+    except (BotoCoreError, ClientError) as exc:
+        raise RuntimeError(f"R2 读取失败: {_error_message(exc)}") from exc
     return local_path
 
 
@@ -108,5 +121,20 @@ def _client() -> BaseClient:
         aws_access_key_id=R2_ACCESS_KEY_ID,
         aws_secret_access_key=R2_SECRET_ACCESS_KEY,
         region_name="auto",
-        config=Config(signature_version="s3v4", s3={"addressing_style": "virtual"}),
+        config=Config(
+            signature_version="s3v4",
+            connect_timeout=5,
+            read_timeout=20,
+            retries={"max_attempts": 2, "mode": "standard"},
+            s3={"addressing_style": "virtual"},
+        ),
     )
+
+
+def _error_message(exc: Exception) -> str:
+    if isinstance(exc, ClientError):
+        error = exc.response.get("Error", {})
+        code = error.get("Code", "ClientError")
+        message = error.get("Message", str(exc))
+        return f"{code}: {message}"
+    return str(exc)

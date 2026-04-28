@@ -27,6 +27,15 @@ def read_dataframe(path: Path) -> pd.DataFrame:
     raise HTTPException(status_code=400, detail="仅支持 xlsx、xls、csv 文件")
 
 
+def read_dataframe_sample(path: Path, limit: int = 50) -> pd.DataFrame:
+    suffix = path.suffix.lower()
+    if suffix == ".csv":
+        return pd.read_csv(path, dtype=str, keep_default_na=False, nrows=limit)
+    if suffix in {".xlsx", ".xls"}:
+        return pd.read_excel(path, dtype=str, keep_default_na=False, nrows=limit)
+    raise HTTPException(status_code=400, detail="仅支持 xlsx、xls、csv 文件")
+
+
 def fetch_remote_file(source_url: str, filename: str | None = None) -> Path:
     suffix = Path(filename or source_url).suffix.lower() or ".xlsx"
     if suffix not in ALLOWED_EXTENSIONS:
@@ -84,8 +93,13 @@ def register_remote_upload(object_key: str, filename: str, content_type: str | N
         raise HTTPException(status_code=400, detail="仅支持 xlsx、xls、csv 文件")
 
     upload_id = str(uuid.uuid4())
-    source_path = download_to_temp(object_key, filename)
-    df = read_dataframe(source_path)
+    try:
+        source_path = download_to_temp(object_key, filename)
+        df = read_dataframe_sample(source_path)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"对象存储文件读取失败: {exc}") from exc
     columns = [str(column) for column in df.columns]
     sample_rows = _json_safe_rows(df)
     suggested_mapping = detect_mapping(columns, sample_rows)
