@@ -26,6 +26,7 @@ class UploadResponse(BaseModel):
     sample_rows: list[dict[str, Any]]
     suggested_mapping: dict[str, StandardField]
     storage_mode: str = "local"
+    storage_key: str | None = None
     source_url: str | None = None
 
 
@@ -75,6 +76,7 @@ class GenerateConfig(BaseModel):
 
 class GenerateReportRequest(BaseModel):
     upload_id: str | None = None
+    storage_key: str | None = None
     source_url: str | None = None
     source_filename: str | None = None
     mapping: dict[str, StandardField]
@@ -107,6 +109,7 @@ class MappingResponse(BaseModel):
 
 class DirectDownloadRequest(BaseModel):
     upload_id: str | None = None
+    storage_key: str | None = None
     source_url: str | None = None
     source_filename: str | None = None
     mapping: dict[str, StandardField]

@@ -14,7 +14,7 @@ from app.services.excel_exporter import export_workbook
 from app.services.file_service import get_upload, read_dataframe, resolve_source
 from app.services.normalizer import dataframe_preview, normalize_dataframe
 from app.services.openrouter_service import build_ai_bp_insights
-from app.services.object_storage import build_export_key, guess_content_type, presigned_download_url, r2_enabled, upload_file
+from app.services.object_storage import build_export_key, download_to_temp, guess_content_type, presigned_download_url, r2_enabled, upload_file
 from app.services.report_planner import apply_report_plan, build_report_plan
 from app.services.report_builder import boss_summary_text, build_metrics, build_report_tables
 
@@ -22,13 +22,18 @@ from app.services.report_builder import boss_summary_text, build_metrics, build_
 REPORT_INDEX = HISTORY_DIR / "reports.json"
 
 
-def generate_report(upload_id: str | None, mapping: dict[str, str], config: Any, source_url: str | None = None, source_filename: str | None = None) -> dict[str, Any]:
+def generate_report(
+    upload_id: str | None,
+    mapping: dict[str, str],
+    config: Any,
+    storage_key: str | None = None,
+    source_url: str | None = None,
+    source_filename: str | None = None,
+) -> dict[str, Any]:
     report_id = str(uuid.uuid4())
-    if source_url:
-        source_path, resolved_filename = resolve_source(None, source_url, source_filename)
-    else:
-        source_path, resolved_filename = resolve_source(upload_id, source_url, source_filename)
-    download_source_url = source_url or _source_url_from_upload(upload_id)
+    source_path, resolved_filename = _resolve_report_source(upload_id, storage_key, source_url, source_filename)
+    download_storage_key = storage_key or _storage_key_from_upload(upload_id)
+    download_source_url = None if download_storage_key else (source_url or _source_url_from_upload(upload_id))
     raw_df = read_dataframe(source_path)
     cleaned = normalize_dataframe(raw_df, mapping)
     anomalies = check_anomalies(cleaned) if config.enable_anomaly_check else cleaned.iloc[0:0].copy()
@@ -79,7 +84,8 @@ def generate_report(upload_id: str | None, mapping: dict[str, str], config: Any,
         "xlsx_path": "",
         "download_url": f"/api/reports/{report_id}/download",
         "download_request": {
-            "upload_id": None if download_source_url else upload_id,
+            "upload_id": None if (download_storage_key or download_source_url) else upload_id,
+            "storage_key": download_storage_key,
             "source_url": download_source_url,
             "source_filename": resolved_filename,
             "mapping": mapping,
@@ -122,13 +128,11 @@ def build_report_file_bytes(
     upload_id: str | None,
     mapping: dict[str, str],
     config: Any,
+    storage_key: str | None = None,
     source_url: str | None = None,
     source_filename: str | None = None,
 ) -> tuple[bytes, str]:
-    if source_url:
-        source_path, resolved_filename = resolve_source(None, source_url, source_filename)
-    else:
-        source_path, resolved_filename = resolve_source(upload_id, source_url, source_filename)
+    source_path, resolved_filename = _resolve_report_source(upload_id, storage_key, source_url, source_filename)
     return build_report_file_bytes_from_path(source_path, resolved_filename, mapping, config)
 
 
@@ -179,3 +183,33 @@ def _source_url_from_upload(upload_id: str | None) -> str | None:
         return None
     value = record.get("source_url")
     return str(value) if value else None
+
+
+def _storage_key_from_upload(upload_id: str | None) -> str | None:
+    if not upload_id:
+        return None
+    try:
+        record = get_upload(upload_id)
+    except Exception:
+        return None
+    value = record.get("storage_key")
+    return str(value) if value else None
+
+
+def _resolve_report_source(
+    upload_id: str | None,
+    storage_key: str | None = None,
+    source_url: str | None = None,
+    source_filename: str | None = None,
+) -> tuple[Path, str]:
+    if storage_key:
+        return download_to_temp(storage_key, source_filename), source_filename or Path(storage_key).name
+    if upload_id:
+        try:
+            return resolve_source(upload_id, None, source_filename)
+        except HTTPException:
+            if not source_url:
+                raise
+    if source_url:
+        return resolve_source(None, source_url, source_filename)
+    return resolve_source(upload_id, None, source_filename)

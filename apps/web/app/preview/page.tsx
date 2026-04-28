@@ -30,8 +30,9 @@ export default function PreviewPage() {
       } else if (report.download_request) {
         await downloadReport({
           ...report.download_request,
-          upload_id: upload?.source_url ? null : report.download_request.upload_id,
-          source_url: report.download_request.source_url || upload?.source_url,
+          upload_id: upload?.storage_key || upload?.source_url ? null : report.download_request.upload_id,
+          storage_key: report.download_request.storage_key || upload?.storage_key,
+          source_url: report.download_request.source_url || (upload?.storage_key ? null : upload?.source_url),
           source_filename: report.download_request.source_filename || upload?.filename
         });
       } else {

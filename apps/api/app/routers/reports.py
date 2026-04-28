@@ -24,6 +24,7 @@ def create_report(payload: GenerateReportRequest):
         payload.upload_id,
         payload.mapping,
         payload.config,
+        storage_key=payload.storage_key,
         source_url=payload.source_url,
         source_filename=payload.source_filename,
     )
@@ -53,6 +54,7 @@ def download_report_direct(payload: DirectDownloadRequest):
             payload.upload_id,
             payload.mapping,
             payload.config,
+            storage_key=payload.storage_key,
             source_url=payload.source_url,
             source_filename=payload.source_filename,
         )

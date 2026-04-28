@@ -19,6 +19,7 @@ export type UploadResult = {
   sample_rows: Record<string, unknown>[];
   suggested_mapping: Record<string, StandardField>;
   storage_mode?: string;
+  storage_key?: string | null;
   source_url?: string | null;
 };
 
@@ -125,13 +126,15 @@ export async function listTemplates() {
 
 export async function generateReport(upload: string | UploadResult, mapping: Record<string, StandardField>, config: GenerateConfig) {
   const uploadId = typeof upload === "string" ? upload : upload.upload_id;
-  const sourceUrl = typeof upload === "string" ? null : upload.source_url;
+  const storageKey = typeof upload === "string" ? null : upload.storage_key;
+  const sourceUrl = typeof upload === "string" || storageKey ? null : upload.source_url;
   const sourceFilename = typeof upload === "string" ? null : upload.filename;
   const response = await fetch(`${API_BASE}/api/reports/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       upload_id: uploadId,
+      storage_key: storageKey,
       source_url: sourceUrl,
       source_filename: sourceFilename,
       mapping,
