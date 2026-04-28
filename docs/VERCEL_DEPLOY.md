@@ -25,6 +25,7 @@
 
 - `OPENROUTER_API_KEY`
 - `OPENROUTER_MODEL`
+- `ENABLE_REMOTE_AI_ON_GENERATE=false`
 - `ALLOWED_ORIGINS=https://<your-web-project>.vercel.app`
 - `R2_ACCOUNT_ID`
 - `R2_ACCESS_KEY_ID`
@@ -44,7 +45,7 @@
 - FastAPI 标准入口 `apps/api/api/index.py`
 - 在 Vercel 环境下自动使用 `/tmp/finance-splitter` 作为临时数据目录
 - 启用 R2 后，前端先获取预签名上传地址，再直传源文件到对象存储
-- 启用 R2 后，生成好的完整 Excel 会回写到 R2，前端优先走对象存储直链下载
+- 线上预览生成不再同步导出完整 Excel，避免 `/api/reports/generate` 被 Excel 导出和 R2 写入拖慢
 - 可通过 `ALLOWED_ORIGINS` 配置线上 CORS 域名
 
 如果启用 Cloudflare R2，请在桶上补一条 CORS，至少允许：

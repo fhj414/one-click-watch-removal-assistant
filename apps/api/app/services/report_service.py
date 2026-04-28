@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from app.core.config import EXPORT_DIR, HISTORY_DIR, IS_VERCEL, PREVIEW_LIMIT
+from app.core.config import ENABLE_REMOTE_AI_ON_GENERATE, EXPORT_DIR, HISTORY_DIR, IS_VERCEL, PREVIEW_LIMIT
 from app.core.storage import append_record, now_iso, read_json, write_json
 from app.services.anomaly_checker import anomaly_summary, check_anomalies
 from app.services.excel_exporter import export_workbook
@@ -37,7 +37,7 @@ def generate_report(upload_id: str | None, mapping: dict[str, str], config: Any,
         base_tables["供应商汇总表"],
         config.export_version,
         config.ai_model,
-        allow_remote_ai=True,
+        allow_remote_ai=bool(config.enable_ai_enhance and ENABLE_REMOTE_AI_ON_GENERATE),
     )
     bp_sheet = None
     if config.enable_ai_enhance and ai_payload.get("sheet_rows"):
@@ -54,10 +54,6 @@ def generate_report(upload_id: str | None, mapping: dict[str, str], config: Any,
         selected_names = {SHEET_NAME_MAP[key] for key in selected_sheets if key in SHEET_NAME_MAP}
         tables = {name: table for name, table in tables.items() if name in selected_names}
 
-    export_filename = f"{Path(resolved_filename).stem or 'finance-report'}-拆表结果.xlsx"
-    output_path = EXPORT_DIR / f"{report_id}.xlsx"
-    export_workbook(tables, output_path, enable_formulas=config.enable_formulas)
-
     metrics = build_metrics(tables if "管理摘要表" in tables else build_report_tables(cleaned, anomalies, bp_sheet=bp_sheet))
     anomalies_stat = anomaly_summary(anomalies)
     preview = {name: dataframe_preview(table, PREVIEW_LIMIT) for name, table in tables.items()}
@@ -73,7 +69,7 @@ def generate_report(upload_id: str | None, mapping: dict[str, str], config: Any,
         "metrics": metrics,
         "anomaly_summary": anomalies_stat,
         "preview": preview,
-        "xlsx_path": str(output_path),
+        "xlsx_path": "",
         "download_url": f"/api/reports/{report_id}/download",
         "download_request": {
             "upload_id": upload_id,
@@ -92,12 +88,16 @@ def generate_report(upload_id: str | None, mapping: dict[str, str], config: Any,
         "finished_at": now_iso(),
         "source_filename": resolved_filename,
     }
-    if r2_enabled():
-        export_key = build_export_key(export_filename)
-        upload_file(output_path, export_key, guess_content_type(export_filename))
-        record["download_url"] = presigned_download_url(export_key, export_filename)
-        record["export_storage_key"] = export_key
     if not IS_VERCEL:
+        export_filename = f"{Path(resolved_filename).stem or 'finance-report'}-拆表结果.xlsx"
+        output_path = EXPORT_DIR / f"{report_id}.xlsx"
+        export_workbook(tables, output_path, enable_formulas=config.enable_formulas)
+        record["xlsx_path"] = str(output_path)
+        if r2_enabled():
+            export_key = build_export_key(export_filename)
+            upload_file(output_path, export_key, guess_content_type(export_filename))
+            record["download_url"] = presigned_download_url(export_key, export_filename)
+            record["export_storage_key"] = export_key
         write_json(HISTORY_DIR / f"report-{report_id}.json", record)
         append_record(REPORT_INDEX, record)
     return record
@@ -117,11 +117,8 @@ def build_report_file_bytes(
     source_url: str | None = None,
     source_filename: str | None = None,
 ) -> tuple[bytes, str]:
-    record = generate_report(upload_id, mapping, config, source_url=source_url, source_filename=source_filename)
-    path = Path(record["xlsx_path"])
-    content = path.read_bytes()
-    filename = f"{Path(record['source_filename']).stem or 'finance-report'}-拆表结果.xlsx"
-    return content, filename
+    source_path, resolved_filename = resolve_source(upload_id, source_url, source_filename)
+    return build_report_file_bytes_from_path(source_path, resolved_filename, mapping, config)
 
 
 def build_report_file_bytes_from_path(source_path: Path, source_filename: str, mapping: dict[str, str], config: Any) -> tuple[bytes, str]:

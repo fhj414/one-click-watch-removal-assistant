@@ -25,6 +25,13 @@ def _r2_endpoint_url(account_id: str) -> str:
     return endpoint.rstrip("/")
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = _env(name)
+    if not value:
+        return default
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
 IS_VERCEL = os.getenv("VERCEL") == "1"
 DATA_ROOT = Path(os.getenv("DATA_ROOT", "/tmp/finance-splitter" if IS_VERCEL else str(BASE_DIR / "data")))
 DATA_DIR = DATA_ROOT
@@ -51,6 +58,7 @@ R2_PUBLIC_BASE_URL = _env("R2_PUBLIC_BASE_URL").rstrip("/")
 R2_PRESIGNED_EXPIRES = int(_env("R2_PRESIGNED_EXPIRES", "3600"))
 R2_UPLOAD_PREFIX = _env("R2_UPLOAD_PREFIX", "uploads").strip("/") or "uploads"
 R2_EXPORT_PREFIX = _env("R2_EXPORT_PREFIX", "exports").strip("/") or "exports"
+ENABLE_REMOTE_AI_ON_GENERATE = _env_bool("ENABLE_REMOTE_AI_ON_GENERATE", False)
 
 
 def ensure_data_dirs() -> None:

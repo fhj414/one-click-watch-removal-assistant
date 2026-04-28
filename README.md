@@ -57,6 +57,11 @@ npm run dev
 - `deepseek/deepseek-chat-v3-0324`：推理更强，适合偏复杂的口径归因
 - `google/gemini-2.5-flash`：速度快，但输出成本明显更高
 
+线上速度建议：
+
+- `ENABLE_REMOTE_AI_ON_GENERATE=false`：生成预览时不等待远程模型，优先返回规则版 BP 摘要和数据预览
+- 下载完整 Excel 时仍会按当前数据重新生成工作簿，避免预览阶段同步导出造成长时间等待
+
 ## Cloudflare R2 对象存储
 
 如需让上传和下载更适合线上环境，建议配置 R2。启用后：
