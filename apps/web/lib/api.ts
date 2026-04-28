@@ -82,7 +82,8 @@ export async function uploadFile(file: File): Promise<UploadResult> {
         body: JSON.stringify({
           object_key: initPayload.object_key,
           filename: file.name,
-          content_type: file.type || "application/octet-stream"
+          content_type: file.type || "application/octet-stream",
+          ...(await buildClientSample(file))
         })
       });
       return handleResponse(completeResponse);
@@ -175,6 +176,57 @@ async function handleResponse<T = any>(response: Response): Promise<T> {
     throw new Error(text || `HTTP ${response.status}`);
   }
   return response.json();
+}
+
+async function buildClientSample(file: File): Promise<{
+  columns?: string[];
+  sample_rows?: Record<string, string>[];
+  rows_count?: number;
+}> {
+  if (!file.name.toLowerCase().endsWith(".csv")) return {};
+  const text = await file.text();
+  const rows = parseCsvSample(text, 50);
+  if (!rows.length) return {};
+  const columns = rows[0].map((column) => column.trim());
+  if (!columns.length) return {};
+  const sampleRows = rows.slice(1, 21).map((row) =>
+    Object.fromEntries(columns.map((column, index) => [column || `列${index + 1}`, row[index] ?? ""]))
+  );
+  const rowCount = Math.max(rows.length - 1, sampleRows.length);
+  return { columns: columns.map((column, index) => column || `列${index + 1}`), sample_rows: sampleRows, rows_count: rowCount };
+}
+
+function parseCsvSample(text: string, maxRows: number): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let inQuotes = false;
+  for (let index = 0; index < text.length && rows.length < maxRows; index += 1) {
+    const char = text[index];
+    const nextChar = text[index + 1];
+    if (char === '"' && inQuotes && nextChar === '"') {
+      cell += '"';
+      index += 1;
+    } else if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === "," && !inQuotes) {
+      row.push(cell);
+      cell = "";
+    } else if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && nextChar === "\n") index += 1;
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += char;
+    }
+  }
+  if (cell || row.length) {
+    row.push(cell);
+    rows.push(row);
+  }
+  return rows.filter((item) => item.some((cellValue) => cellValue.trim() !== ""));
 }
 
 function extractFilename(contentDisposition: string | null): string | null {

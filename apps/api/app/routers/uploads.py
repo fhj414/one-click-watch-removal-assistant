@@ -20,7 +20,14 @@ def init_upload(payload: UploadInitRequest):
 
 @router.post("/complete", response_model=UploadResponse)
 def complete_upload(payload: RemoteUploadCreate):
-    record = register_remote_upload(payload.object_key, payload.filename, payload.content_type)
+    record = register_remote_upload(
+        payload.object_key,
+        payload.filename,
+        payload.content_type,
+        columns=payload.columns,
+        sample_rows=payload.sample_rows,
+        rows_count=payload.rows_count,
+    )
     return {
         "upload_id": record["id"],
         "filename": record["original_name"],

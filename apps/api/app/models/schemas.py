@@ -45,6 +45,9 @@ class RemoteUploadCreate(BaseModel):
     object_key: str
     filename: str = Field(min_length=1, max_length=255)
     content_type: str | None = None
+    columns: list[str] | None = None
+    sample_rows: list[dict[str, Any]] | None = None
+    rows_count: int | None = None
 
 
 class TemplateCreate(BaseModel):

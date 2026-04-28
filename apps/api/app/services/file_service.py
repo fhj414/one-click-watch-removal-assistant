@@ -85,7 +85,14 @@ async def save_upload(file: UploadFile) -> dict[str, Any]:
     return record
 
 
-def register_remote_upload(object_key: str, filename: str, content_type: str | None = None) -> dict[str, Any]:
+def register_remote_upload(
+    object_key: str,
+    filename: str,
+    content_type: str | None = None,
+    columns: list[str] | None = None,
+    sample_rows: list[dict[str, Any]] | None = None,
+    rows_count: int | None = None,
+) -> dict[str, Any]:
     if not r2_enabled():
         raise HTTPException(status_code=400, detail="对象存储未启用")
     suffix = Path(filename).suffix.lower()
@@ -93,24 +100,30 @@ def register_remote_upload(object_key: str, filename: str, content_type: str | N
         raise HTTPException(status_code=400, detail="仅支持 xlsx、xls、csv 文件")
 
     upload_id = str(uuid.uuid4())
-    try:
-        source_path = download_to_temp(object_key, filename)
-        df = read_dataframe_sample(source_path)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"对象存储文件读取失败: {exc}") from exc
-    columns = [str(column) for column in df.columns]
-    sample_rows = _json_safe_rows(df)
-    suggested_mapping = detect_mapping(columns, sample_rows)
+    if columns and sample_rows is not None:
+        resolved_columns = [str(column) for column in columns]
+        resolved_sample_rows = sample_rows[:20]
+        resolved_rows_count = int(rows_count or len(sample_rows))
+    else:
+        try:
+            source_path = download_to_temp(object_key, filename)
+            df = read_dataframe_sample(source_path)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"对象存储文件读取失败: {exc}") from exc
+        resolved_columns = [str(column) for column in df.columns]
+        resolved_sample_rows = _json_safe_rows(df)
+        resolved_rows_count = int(len(df))
+    suggested_mapping = detect_mapping(resolved_columns, resolved_sample_rows)
     record = {
         "id": upload_id,
         "original_name": filename,
         "stored_path": "",
         "file_type": suffix.lstrip("."),
-        "rows_count": int(len(df)),
-        "columns": columns,
-        "sample_rows": sample_rows,
+        "rows_count": resolved_rows_count,
+        "columns": resolved_columns,
+        "sample_rows": resolved_sample_rows,
         "suggested_mapping": suggested_mapping,
         "created_at": now_iso(),
         "storage_mode": "r2",
