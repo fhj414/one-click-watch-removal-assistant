@@ -15,6 +15,7 @@ from app.services.file_service import read_dataframe, resolve_source
 from app.services.normalizer import dataframe_preview, normalize_dataframe
 from app.services.openrouter_service import build_ai_bp_insights
 from app.services.object_storage import build_export_key, guess_content_type, presigned_download_url, r2_enabled, upload_file
+from app.services.report_planner import apply_report_plan, build_report_plan
 from app.services.report_builder import boss_summary_text, build_metrics, build_report_tables
 
 
@@ -27,6 +28,7 @@ def generate_report(upload_id: str | None, mapping: dict[str, str], config: Any,
     raw_df = read_dataframe(source_path)
     cleaned = normalize_dataframe(raw_df, mapping)
     anomalies = check_anomalies(cleaned) if config.enable_anomaly_check else cleaned.iloc[0:0].copy()
+    report_plan = build_report_plan(cleaned, anomalies)
     base_tables = build_report_tables(cleaned, anomalies)
     ai_payload, ai_enabled, ai_model = build_ai_bp_insights(
         cleaned,
@@ -48,11 +50,12 @@ def generate_report(upload_id: str | None, mapping: dict[str, str], config: Any,
     tables = build_report_tables(cleaned, anomalies, bp_sheet=bp_sheet)
 
     selected_sheets = set(config.sheets or [])
+    selected_names: set[str] | None = None
     if selected_sheets:
         from app.services.report_builder import SHEET_NAME_MAP
 
         selected_names = {SHEET_NAME_MAP[key] for key in selected_sheets if key in SHEET_NAME_MAP}
-        tables = {name: table for name, table in tables.items() if name in selected_names}
+    tables = apply_report_plan(tables, report_plan, selected_names)
 
     metrics = build_metrics(tables if "管理摘要表" in tables else build_report_tables(cleaned, anomalies, bp_sheet=bp_sheet))
     anomalies_stat = anomaly_summary(anomalies)
@@ -78,6 +81,7 @@ def generate_report(upload_id: str | None, mapping: dict[str, str], config: Any,
             "mapping": mapping,
             "config": config.model_dump(),
         },
+        "report_plan": report_plan,
         "boss_summary": summary_text,
         "ai_enabled": bool(config.enable_ai_enhance and ai_enabled),
         "ai_model": ai_model if config.enable_ai_enhance else None,

@@ -93,4 +93,5 @@ def _response(record: dict):
         "ai_enabled": record.get("ai_enabled", False),
         "ai_model": record.get("ai_model"),
         "download_request": record.get("download_request"),
+        "report_plan": record.get("report_plan"),
     }

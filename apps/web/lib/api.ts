@@ -50,6 +50,18 @@ export type ReportResult = {
   ai_enabled: boolean;
   ai_model?: string | null;
   download_request?: Record<string, unknown> | null;
+  report_plan?: {
+    data_type?: string;
+    data_type_label?: string;
+    recommended_sheets?: string[];
+    bp_focus?: string[];
+    missing_fields?: string[];
+    reasons?: string[];
+    row_count?: number;
+    income_count?: number;
+    expense_count?: number;
+    anomaly_count?: number;
+  } | null;
 };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";

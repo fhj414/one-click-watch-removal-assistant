@@ -92,6 +92,7 @@ class ReportResponse(BaseModel):
     ai_enabled: bool = False
     ai_model: str | None = None
     download_request: dict[str, Any] | None = None
+    report_plan: dict[str, Any] | None = None
 
 
 class MappingResponse(BaseModel):

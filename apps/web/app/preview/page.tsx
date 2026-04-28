@@ -69,6 +69,28 @@ export default function PreviewPage() {
             <Metric title="异常记录" value={`${report.metrics.anomaly_count || 0} 条`} />
           </section>
 
+          {report.report_plan && (
+            <Card>
+              <CardHeader>
+                <h2 className="font-semibold">动态报表规划</h2>
+              </CardHeader>
+              <CardContent className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+                <div>
+                  <p className="text-sm text-slate-500">识别类型</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-900">{report.report_plan.data_type_label || "通用财务台账分析"}</p>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                    {(report.report_plan.reasons || []).join(" ")}
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  <TagGroup title="BP 关注点" items={report.report_plan.bp_focus || []} />
+                  <TagGroup title="推荐输出" items={(report.report_plan.recommended_sheets || []).slice(0, 8)} />
+                  {!!report.report_plan.missing_fields?.length && <TagGroup title="建议补充字段" items={report.report_plan.missing_fields} muted />}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <h2 className="font-semibold">老板摘要</h2>
@@ -124,5 +146,24 @@ function Metric({ title, value }: { title: string; value: string }) {
         <p className="mt-2 text-2xl font-semibold">{value}</p>
       </CardContent>
     </Card>
+  );
+}
+
+function TagGroup({ title, items, muted = false }: { title: string; items: string[]; muted?: boolean }) {
+  if (!items.length) return null;
+  return (
+    <div>
+      <p className="mb-2 text-xs font-medium text-slate-500">{title}</p>
+      <div className="flex flex-wrap gap-2">
+        {items.map((item) => (
+          <span
+            key={item}
+            className={`rounded-md px-2 py-1 text-xs ${muted ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-700"}`}
+          >
+            {item}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
