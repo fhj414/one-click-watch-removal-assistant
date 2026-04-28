@@ -26,6 +26,7 @@ class UploadResponse(BaseModel):
     sample_rows: list[dict[str, Any]]
     suggested_mapping: dict[str, StandardField]
     storage_mode: str = "local"
+    source_url: str | None = None
 
 
 class UploadInitRequest(BaseModel):

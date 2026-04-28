@@ -13,6 +13,7 @@ import { useWorkflowStore } from "@/store/workflow";
 
 export default function PreviewPage() {
   const report = useWorkflowStore((state) => state.report);
+  const upload = useWorkflowStore((state) => state.upload);
   const sourceFile = useWorkflowStore((state) => state.sourceFile);
   const mapping = useWorkflowStore((state) => state.mapping);
   const config = useWorkflowStore((state) => state.config);
@@ -27,7 +28,12 @@ export default function PreviewPage() {
       } else if (sourceFile) {
         await downloadReportFromFile(sourceFile, mapping, config);
       } else if (report.download_request) {
-        await downloadReport(report.download_request);
+        await downloadReport({
+          ...report.download_request,
+          upload_id: upload?.source_url ? null : report.download_request.upload_id,
+          source_url: report.download_request.source_url || upload?.source_url,
+          source_filename: report.download_request.source_filename || upload?.filename
+        });
       } else {
         throw new Error("原始文件已丢失，请重新上传后再下载。");
       }

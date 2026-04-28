@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import pandas as pd
@@ -18,6 +19,7 @@ def export_workbook(tables: dict[str, pd.DataFrame], output_path: Path, enable_f
     wb = Workbook()
     default_sheet = wb.active
     wb.remove(default_sheet)
+    used_table_names: set[str] = set()
 
     for sheet_name, df in tables.items():
         ws = wb.create_sheet(sheet_name[:31])
@@ -27,7 +29,7 @@ def export_workbook(tables: dict[str, pd.DataFrame], output_path: Path, enable_f
         for row in safe_df.itertuples(index=False, name=None):
             ws.append(list(row))
 
-        _style_sheet(ws, headers, sheet_name)
+        _style_sheet(ws, headers, sheet_name, used_table_names)
         if enable_formulas and ws.max_row >= 2:
             _add_totals(ws, headers)
 
@@ -43,7 +45,7 @@ def _prepare_for_excel(df: pd.DataFrame) -> pd.DataFrame:
     return result.where(pd.notna(result), "")
 
 
-def _style_sheet(ws, headers: list[str], sheet_name: str) -> None:
+def _style_sheet(ws, headers: list[str], sheet_name: str, used_table_names: set[str]) -> None:
     header_fill = PatternFill("solid", fgColor="E8F1FF")
     anomaly_fill = PatternFill("solid", fgColor="FFE4E6")
     for cell in ws[1]:
@@ -54,7 +56,7 @@ def _style_sheet(ws, headers: list[str], sheet_name: str) -> None:
 
     if ws.max_row >= 2 and ws.max_column >= 1:
         ref = f"A1:{get_column_letter(ws.max_column)}{ws.max_row}"
-        table = Table(displayName=_safe_table_name(sheet_name), ref=ref)
+        table = Table(displayName=_safe_table_name(sheet_name, used_table_names), ref=ref)
         table.tableStyleInfo = TableStyleInfo(name="TableStyleMedium2", showRowStripes=True, showColumnStripes=False)
         ws.add_table(table)
 
@@ -89,6 +91,14 @@ def _add_totals(ws, headers: list[str]) -> None:
             ws.cell(row=total_row, column=index).font = Font(bold=True)
 
 
-def _safe_table_name(sheet_name: str) -> str:
+def _safe_table_name(sheet_name: str, used_table_names: set[str]) -> str:
     ascii_name = "".join(ch for ch in sheet_name if ch.isascii() and ch.isalnum())
-    return f"T_{ascii_name or abs(hash(sheet_name))}"
+    digest = hashlib.md5(sheet_name.encode("utf-8")).hexdigest()[:8]
+    base_name = f"T_{(ascii_name[:18] or 'Sheet')}_{digest}"
+    table_name = base_name
+    suffix = 2
+    while table_name in used_table_names:
+        table_name = f"{base_name}_{suffix}"
+        suffix += 1
+    used_table_names.add(table_name)
+    return table_name

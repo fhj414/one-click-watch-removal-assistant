@@ -35,6 +35,7 @@ def complete_upload(payload: RemoteUploadCreate):
         "sample_rows": record["sample_rows"],
         "suggested_mapping": record["suggested_mapping"],
         "storage_mode": record.get("storage_mode", "r2"),
+        "source_url": record.get("source_url"),
     }
 
 
@@ -48,6 +49,7 @@ async def upload_file(file: UploadFile):
         "sample_rows": record["sample_rows"],
         "suggested_mapping": record["suggested_mapping"],
         "storage_mode": "local",
+        "source_url": None,
     }
 
 

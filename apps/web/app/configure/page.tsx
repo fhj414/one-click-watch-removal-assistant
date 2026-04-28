@@ -27,7 +27,7 @@ export default function ConfigurePage() {
     setLoading(true);
     setError("");
     try {
-      const report = await generateReport(upload.upload_id, mapping, config);
+      const report = await generateReport(upload, mapping, config);
       setReport(report);
       router.push("/preview");
     } catch (err) {

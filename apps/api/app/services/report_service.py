@@ -11,7 +11,7 @@ from app.core.config import ENABLE_REMOTE_AI_ON_GENERATE, EXPORT_DIR, HISTORY_DI
 from app.core.storage import append_record, now_iso, read_json, write_json
 from app.services.anomaly_checker import anomaly_summary, check_anomalies
 from app.services.excel_exporter import export_workbook
-from app.services.file_service import read_dataframe, resolve_source
+from app.services.file_service import get_upload, read_dataframe, resolve_source
 from app.services.normalizer import dataframe_preview, normalize_dataframe
 from app.services.openrouter_service import build_ai_bp_insights
 from app.services.object_storage import build_export_key, guess_content_type, presigned_download_url, r2_enabled, upload_file
@@ -24,7 +24,11 @@ REPORT_INDEX = HISTORY_DIR / "reports.json"
 
 def generate_report(upload_id: str | None, mapping: dict[str, str], config: Any, source_url: str | None = None, source_filename: str | None = None) -> dict[str, Any]:
     report_id = str(uuid.uuid4())
-    source_path, resolved_filename = resolve_source(upload_id, source_url, source_filename)
+    if source_url:
+        source_path, resolved_filename = resolve_source(None, source_url, source_filename)
+    else:
+        source_path, resolved_filename = resolve_source(upload_id, source_url, source_filename)
+    download_source_url = source_url or _source_url_from_upload(upload_id)
     raw_df = read_dataframe(source_path)
     cleaned = normalize_dataframe(raw_df, mapping)
     anomalies = check_anomalies(cleaned) if config.enable_anomaly_check else cleaned.iloc[0:0].copy()
@@ -75,8 +79,8 @@ def generate_report(upload_id: str | None, mapping: dict[str, str], config: Any,
         "xlsx_path": "",
         "download_url": f"/api/reports/{report_id}/download",
         "download_request": {
-            "upload_id": upload_id,
-            "source_url": source_url,
+            "upload_id": None if download_source_url else upload_id,
+            "source_url": download_source_url,
             "source_filename": resolved_filename,
             "mapping": mapping,
             "config": config.model_dump(),
@@ -121,7 +125,10 @@ def build_report_file_bytes(
     source_url: str | None = None,
     source_filename: str | None = None,
 ) -> tuple[bytes, str]:
-    source_path, resolved_filename = resolve_source(upload_id, source_url, source_filename)
+    if source_url:
+        source_path, resolved_filename = resolve_source(None, source_url, source_filename)
+    else:
+        source_path, resolved_filename = resolve_source(upload_id, source_url, source_filename)
     return build_report_file_bytes_from_path(source_path, resolved_filename, mapping, config)
 
 
@@ -161,3 +168,14 @@ def build_report_file_bytes_from_path(source_path: Path, source_filename: str, m
     content = output_path.read_bytes()
     filename = f"{Path(source_filename).stem or 'finance-report'}-拆表结果.xlsx"
     return content, filename
+
+
+def _source_url_from_upload(upload_id: str | None) -> str | None:
+    if not upload_id:
+        return None
+    try:
+        record = get_upload(upload_id)
+    except Exception:
+        return None
+    value = record.get("source_url")
+    return str(value) if value else None

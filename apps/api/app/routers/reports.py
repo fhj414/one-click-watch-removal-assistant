@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
 from app.models.schemas import DirectDownloadRequest, GenerateConfig, GenerateReportRequest, ReportResponse
@@ -48,13 +48,18 @@ def download_report(report_id: str):
 
 @router.post("/download-direct")
 def download_report_direct(payload: DirectDownloadRequest):
-    content, filename = build_report_file_bytes(
-        payload.upload_id,
-        payload.mapping,
-        payload.config,
-        source_url=payload.source_url,
-        source_filename=payload.source_filename,
-    )
+    try:
+        content, filename = build_report_file_bytes(
+            payload.upload_id,
+            payload.mapping,
+            payload.config,
+            source_url=payload.source_url,
+            source_filename=payload.source_filename,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"下载文件生成失败: {exc}") from exc
     headers = _build_download_headers(filename)
     return StreamingResponse(
         iter([content]),
